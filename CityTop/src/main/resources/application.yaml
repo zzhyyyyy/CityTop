@@ -1,0 +1,46 @@
+server:
+  port: 8081
+spring:
+  application:
+    name: CityTop
+  datasource:
+    driver-class-name: com.mysql.jdbc.Driver
+    url: jdbc:mysql://8.163.27.12/sql_store?useSSL=false&serverTimezone=UTC
+    username: root
+    password: 20031121zzh.
+  redis:
+    host: 8.163.27.12
+    port: 6379
+    password: 20031121zzh.
+    lettuce:
+      pool:
+        max-active: 10
+        max-idle: 10
+        min-idle: 1
+        time-between-eviction-runs: 10s
+  jackson:
+    default-property-inclusion: non_null # JSON处理时忽略非空字段
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+    # 关键配置：开启消息确认
+    publisher-confirm-type: correlated  # 生产者确认
+    publisher-returns: true              # 失败回调
+    listener:
+      simple:
+        acknowledge-mode: manual         # 手动ACK
+        concurrency: 5                   # 最小并发消费者
+        max-concurrency: 20              # 最大并发消费者
+        prefetch: 1                      # 每次取1条，公平分发
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.CityTop.entity # 别名扫描包
+  configuration:
+    map-underscore-to-camel-case: true
+logging:
+  level:
+    com.CityTop: debug
+
