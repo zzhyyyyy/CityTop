@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @SpringBootTest
-class HmDianPingApplicationTests {
+class CityTopApplicationTests {
 
     @Autowired
     private RedisIdWorker redisIdWorker;

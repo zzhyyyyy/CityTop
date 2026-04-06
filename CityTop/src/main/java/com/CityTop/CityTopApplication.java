@@ -6,10 +6,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @MapperScan("com.CityTop.mapper")
 @SpringBootApplication
-public class HmDianPingApplication {
+public class CityTopApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(HmDianPingApplication.class, args);
+        SpringApplication.run(CityTopApplication.class, args);
     }
 
 }
