@@ -33,10 +33,10 @@ public class RabbitMQConfig {
                 .withArgument("x-dead-letter-exchange", "seckill.dlx.exchange")
                 .withArgument("x-dead-letter-routing-key", "seckill.dlx.key")
                 // 队列消息过期时间（可选）
-                // .withArgument("x-message-ttl", 60000)
+                .withArgument("x-message-ttl", 10000)
                 .build();
     }
-    
+
     /**
      * 绑定关系
      */

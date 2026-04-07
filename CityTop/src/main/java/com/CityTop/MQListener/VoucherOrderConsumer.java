@@ -90,7 +90,7 @@ public class VoucherOrderConsumer {
             stock = Long.parseLong(s);
         }
         redisTemplate.opsForValue().set("seckill:stock:"+voucherId, String.valueOf(stock+1));
-        redisTemplate.opsForHash().delete("seckill:user:"+voucherId, userId);
+        redisTemplate.opsForSet().remove("seckill:user:"+voucherId, String.valueOf(userId));
         channel.basicAck(deliveryTag, false);
     }
 
