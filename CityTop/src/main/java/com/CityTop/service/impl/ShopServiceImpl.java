@@ -35,16 +35,16 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Autowired
     private RedissonClient redissonClient;
     @Override
-    public Shop queryById(Long id) {
+    public Shop queryById(Long id) throws InterruptedException {
         // 基于缓存空对象解决缓存穿透问题 因为采用逻辑过期解决缓存击穿问题 多加了一个ExpiredTime 所以用queryCacheByThrougt和queryCacheByMutex无法正确解析Json对象了
         //return queryCacheByThrougt(id);
         // 基于互斥锁解决缓存击穿问题
         //return queryCacheByMutex(id);
         //基于逻辑过期解决缓存击穿问题
-        return queryCacheByMutex(id);
+        return queryCacheByThrougt(id);
     }
 
-    public Shop queryCacheByThrougt(Long id){
+    public Shop queryCacheByThrougt(Long id) throws InterruptedException {
         log.info("查询店铺信息，id：{}", id);
         String key = "shop:" + id;
         String shopJson = redisTemplate.opsForValue().get(key);
@@ -59,15 +59,26 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             return null;
         }
         Shop shop = this.getById(id);
-        if(shop==null)
-        {
-            log.info("店铺不存在");
-            redisTemplate.opsForValue().set(key, "", 2L, TimeUnit.MINUTES);
-            return null;
+        log.info("店铺信息：{}",shop);
+        String lockKey = "lock:shop" + id;
+        RLock lock = redissonClient.getLock(lockKey);
+        if(lock.tryLock()) {
+            if (shop == null) {
+                log.info("店铺不存在");
+                redisTemplate.opsForValue().set(key, "", 2L, TimeUnit.MINUTES);
+                return null;
+            }
+            if(redisTemplate.opsForValue().get(key) == null) {
+                redisTemplate.opsForValue().set(key, JSON.toJSONString(shop));
+                redisTemplate.expire(key, 30L, TimeUnit.MINUTES);
+                log.info("店铺信息不存在，写入缓存");
+            }
         }
-        redisTemplate.opsForValue().set(key, JSON.toJSONString(shop));
-        redisTemplate.expire(key, 30L, TimeUnit.MINUTES);
-        log.info("店铺信息不存在，写入缓存");
+        else {
+            log.info("获取锁失败，等待重试");
+            Thread.sleep(50);
+            return queryCacheByThrougt(id);
+        }
         return shop;
     }
     public Shop queryCacheByMutex(Long id) {

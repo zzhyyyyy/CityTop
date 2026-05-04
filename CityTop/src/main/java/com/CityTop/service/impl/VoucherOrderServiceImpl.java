@@ -1,10 +1,10 @@
 package com.CityTop.service.impl;
 
-import com.CityTop.config.RabbitMQConfig;
+import com.CityTop.config.RocketMQConfig;
 import com.CityTop.dto.Result;
 import com.CityTop.entity.VoucherOrder;
 import com.CityTop.mapper.VoucherOrderMapper;
-import com.CityTop.rabbitmqMessageConvert.VoucherOrderMessage;
+import com.CityTop.mqmessage.VoucherOrderMessage;
 import com.CityTop.service.ISeckillVoucherService;
 import com.CityTop.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -13,9 +13,7 @@ import com.CityTop.utils.RedisIdWorker;
 import com.CityTop.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
-import org.springframework.amqp.core.MessageDeliveryMode;
-import org.springframework.amqp.rabbit.connection.CorrelationData;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.ClassPathResource;
@@ -53,7 +51,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Autowired
     private RedissonClient redissonClient;
     @Autowired
-    private RabbitTemplate rabbitTemplate;
+    private RocketMQTemplate rocketMQTemplate;
     private static final DefaultRedisScript<Long> SECKILL_SCRIPT;
     static {
         SECKILL_SCRIPT = new DefaultRedisScript<>();
@@ -125,18 +123,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 .createTime(LocalDateTime.now())
                 .retryCount(0)
                 .build();
-        CorrelationData correlationData = new CorrelationData(String.valueOf(order));
-
-        rabbitTemplate.convertAndSend(
-                RabbitMQConfig.EXCHANGE_NAME,
-                RabbitMQConfig.ROUTING_KEY,
-                message,
-                msg -> {
-                    // 消息持久化
-                    msg.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
-                    return msg;
-                },
-                correlationData
+        rocketMQTemplate.convertAndSend(
+                RocketMQConfig.TOPIC + ":" + RocketMQConfig.TAG_ORDER,
+                message
         );
         return Result.ok(order);
     }

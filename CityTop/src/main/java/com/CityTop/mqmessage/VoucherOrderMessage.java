@@ -1,4 +1,4 @@
-package com.CityTop.rabbitmqMessageConvert;
+package com.CityTop.mqmessage;
 
 import com.CityTop.entity.VoucherOrder;
 import lombok.AllArgsConstructor;

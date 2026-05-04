@@ -38,7 +38,7 @@ public class ShopController {
      * @return 商铺详情数据
      */
     @GetMapping("/{id}")
-    public Result queryShopById(@PathVariable("id") Long id) {
+    public Result queryShopById(@PathVariable("id") Long id) throws InterruptedException {
         Shop shop = shopService.queryById(id);
         if(shop==null) return Result.fail("店铺不存在");
         return Result.ok(shop);

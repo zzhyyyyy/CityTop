@@ -20,21 +20,10 @@ spring:
         time-between-eviction-runs: 10s
   jackson:
     default-property-inclusion: non_null # JSON处理时忽略非空字段
-  rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
-    virtual-host: /
-    # 关键配置：开启消息确认
-    publisher-confirm-type: correlated  # 生产者确认
-    publisher-returns: true              # 失败回调
-    listener:
-      simple:
-        acknowledge-mode: manual         # 手动ACK
-        concurrency: 5                   # 最小并发消费者
-        max-concurrency: 20              # 最大并发消费者
-        prefetch: 1                      # 每次取1条，公平分发
+rocketmq:
+  name-server: localhost:9876
+  producer:
+    group: seckill-order-producer-group
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
   type-aliases-package: com.CityTop.entity # 别名扫描包
