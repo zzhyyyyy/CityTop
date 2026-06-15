@@ -19,4 +19,11 @@ public class RedisConstants {
     public static final String FEED_KEY = "feed:";
     public static final String SHOP_GEO_KEY = "shop:geo:";
     public static final String USER_SIGN_KEY = "sign:";
+
+    // ===== 短信验证码接口限流 =====
+    public static final String RATE_LIMIT_SMS_IP_KEY = "rate:sms:ip:";      // 同IP限流key前缀
+    public static final String RATE_LIMIT_SMS_PHONE_KEY = "rate:sms:phone:"; // 同手机号限流key前缀
+    public static final int RATE_LIMIT_SMS_IP_MAX = 10;     // 同IP每窗口最多次数
+    public static final int RATE_LIMIT_SMS_PHONE_MAX = 1;   // 同手机号每窗口最多次数
+    public static final int RATE_LIMIT_SMS_WINDOW = 60;     // 窗口大小（秒）
 }
