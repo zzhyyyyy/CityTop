@@ -27,8 +27,7 @@ public class WebMvcConfiguration  extends WebMvcConfigurationSupport {
                 .excludePathPatterns("/user/login")
                 .excludePathPatterns("/shop/**")
                 .excludePathPatterns("/shop-type/**")
-                .excludePathPatterns("upload/**")
-                .excludePathPatterns("/voucher/**").order(1);
+                .excludePathPatterns("upload/**").order(1);
         registry.addInterceptor(interceptorAll)
                 .addPathPatterns("/**").order(0);
     }

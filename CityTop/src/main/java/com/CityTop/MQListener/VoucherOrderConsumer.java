@@ -14,10 +14,14 @@ import org.apache.rocketmq.spring.annotation.MessageModel;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
+import org.springframework.dao.DuplicateKeyException;
 
 import javax.annotation.Resource;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -35,6 +39,15 @@ import java.util.concurrent.TimeUnit;
 public class VoucherOrderConsumer implements RocketMQListener<MessageExt> {
 
     private static final int MAX_RETRY = 3;
+    private static final String PROCESSED_KEY_PREFIX = "order:processed:";
+    private static final String STATUS_KEY_PREFIX = "order:status:";
+    private static final DefaultRedisScript<Long> SECKILL_ROLLBACK_SCRIPT;
+
+    static {
+        SECKILL_ROLLBACK_SCRIPT = new DefaultRedisScript<>();
+        SECKILL_ROLLBACK_SCRIPT.setLocation(new ClassPathResource("seckill_rollback.lua"));
+        SECKILL_ROLLBACK_SCRIPT.setResultType(Long.class);
+    }
 
     @Resource
     private IVoucherOrderService voucherOrderService;
@@ -48,52 +61,74 @@ public class VoucherOrderConsumer implements RocketMQListener<MessageExt> {
         int reconsumeTimes = messageExt.getReconsumeTimes();
         try {
             log.info("收到订单消息: {}, reconsumeTimes={}", message.getOrderId(), reconsumeTimes);
-            // int i = 1/0; 测试rocketmq的重试机制
-            String processedKey = "order:processed:" + message.getOrderId();
-            Boolean processed = redisTemplate.opsForValue()
-                    .setIfAbsent(processedKey, "1", 5, TimeUnit.MINUTES);
-
-            if (Boolean.FALSE.equals(processed)) {
+            String processedKey = PROCESSED_KEY_PREFIX + message.getOrderId();
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(processedKey)) || orderExists(message)) {
                 log.warn("订单已处理，跳过: {}", message.getOrderId());
+                markOrderSuccess(message);
                 return;
             }
 
             VoucherOrder order = message.toVoucherOrder();
             voucherOrderService.createVoucherOrder(order);
-
-            redisTemplate.opsForValue().set(
-                    "order:status:" + message.getOrderId(),
-                    JSON.toJSONString(Result.ok("下单成功")),
-                    30, TimeUnit.MINUTES
-            );
+            markOrderSuccess(message);
 
             log.info("订单处理成功: {}", message.getOrderId());
-        } catch (Exception e) {
-            log.error("订单处理失败: {}, reconsumeTimes={}", message.getOrderId(), reconsumeTimes, e);
-            if (reconsumeTimes >= MAX_RETRY - 1) {
-                rollbackRedisState(message);
+        } catch (DuplicateKeyException | IllegalStateException e) {
+            if (orderExists(message)) {
+                log.info("订单已由其他消息完成创建: {}", message.getOrderId());
+                markOrderSuccess(message);
                 return;
             }
-            throw new RuntimeException("consume failed, retry later");
+            handleFailure(message, reconsumeTimes, e);
+        } catch (Exception e) {
+            handleFailure(message, reconsumeTimes, e);
         }
+    }
+
+    private boolean orderExists(VoucherOrderMessage message) {
+        return voucherOrderService.getById(message.getOrderId()) != null;
+    }
+
+    private void markOrderSuccess(VoucherOrderMessage message) {
+        redisTemplate.opsForValue().set(
+                PROCESSED_KEY_PREFIX + message.getOrderId(),
+                "1",
+                30, TimeUnit.MINUTES
+        );
+        redisTemplate.opsForValue().set(
+                STATUS_KEY_PREFIX + message.getOrderId(),
+                JSON.toJSONString(Result.ok("下单成功")),
+                30, TimeUnit.MINUTES
+        );
+    }
+
+    private void handleFailure(VoucherOrderMessage message, int reconsumeTimes, Exception e) {
+        log.error("订单处理失败: {}, reconsumeTimes={}", message.getOrderId(), reconsumeTimes, e);
+        if (reconsumeTimes >= MAX_RETRY - 1) {
+            if (orderExists(message)) {
+                markOrderSuccess(message);
+                return;
+            }
+            rollbackRedisState(message);
+            return;
+        }
+        throw new RuntimeException("consume failed, retry later", e);
     }
 
     private void rollbackRedisState(VoucherOrderMessage message) {
         Long userId = message.getUserId();
         Long voucherId = message.getVoucherId();
-        String stockKey = "seckill:stock:" + voucherId;
-        String userSetKey = "seckill:user:" + voucherId;
-
-        String stockValue = redisTemplate.opsForValue().get(stockKey);
-        long stock = stockValue == null ? 0L : Long.parseLong(stockValue);
-        redisTemplate.opsForValue().set(stockKey, String.valueOf(stock + 1));
-        redisTemplate.opsForSet().remove(userSetKey, String.valueOf(userId));
+        Long rollbackResult = redisTemplate.execute(
+                SECKILL_ROLLBACK_SCRIPT,
+                Arrays.asList("seckill:stock:" + voucherId, "seckill:user:" + voucherId),
+                String.valueOf(userId)
+        );
 
         redisTemplate.opsForValue().set(
-                "order:status:" + message.getOrderId(),
+                STATUS_KEY_PREFIX + message.getOrderId(),
                 JSON.toJSONString(Result.fail("下单失败，请重试")),
                 30, TimeUnit.MINUTES
         );
-        log.error("订单失败已回滚Redis状态: orderId={}", message.getOrderId());
+        log.error("订单失败已回滚Redis状态: orderId={}, rollbackResult={}", message.getOrderId(), rollbackResult);
     }
 }

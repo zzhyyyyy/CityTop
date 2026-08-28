@@ -53,10 +53,14 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Autowired
     private RocketMQTemplate rocketMQTemplate;
     private static final DefaultRedisScript<Long> SECKILL_SCRIPT;
+    private static final DefaultRedisScript<Long> SECKILL_ROLLBACK_SCRIPT;
     static {
         SECKILL_SCRIPT = new DefaultRedisScript<>();
         SECKILL_SCRIPT.setLocation(new ClassPathResource("seckill.lua"));
         SECKILL_SCRIPT.setResultType(Long.class);
+        SECKILL_ROLLBACK_SCRIPT = new DefaultRedisScript<>();
+        SECKILL_ROLLBACK_SCRIPT.setLocation(new ClassPathResource("seckill_rollback.lua"));
+        SECKILL_ROLLBACK_SCRIPT.setResultType(Long.class);
     }
     //订单队列
 //    private BlockingQueue<VoucherOrder> orderTasks = new ArrayBlockingQueue<>(1024 * 1024);
@@ -99,10 +103,15 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     @Override
     public Result purchase(Long voucherId) {
+        Long userId = UserHolder.getUser().getId();
         List<String> keys = new ArrayList<>();
         keys.add("seckill:stock:" + voucherId);
         keys.add("seckill:user:"  + voucherId);
-        Long execute = stringRedisTemplate.execute(SECKILL_SCRIPT, keys, UserHolder.getUser().getId().toString());
+        Long execute = stringRedisTemplate.execute(SECKILL_SCRIPT, keys, userId.toString());
+        if (execute == null) {
+            log.error("执行秒杀脚本失败, voucherId={}, userId={}", voucherId, userId);
+            return Result.fail("系统繁忙，请稍后重试");
+        }
         int result = execute.intValue();
         if(result==1) {
             return Result.fail("库存不足");
@@ -118,16 +127,30 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 //        orderTasks.add(voucherOrder);
         VoucherOrderMessage message = VoucherOrderMessage.builder()
                 .voucherId(voucherId)
-                .userId(UserHolder.getUser().getId())
+                .userId(userId)
                 .orderId(order)
                 .createTime(LocalDateTime.now())
                 .retryCount(0)
                 .build();
-        rocketMQTemplate.convertAndSend(
-                RocketMQConfig.TOPIC + ":" + RocketMQConfig.TAG_ORDER,
-                message
-        );
+        try {
+            rocketMQTemplate.convertAndSend(
+                    RocketMQConfig.TOPIC + ":" + RocketMQConfig.TAG_ORDER,
+                    message
+            );
+        } catch (Exception e) {
+            rollbackRedisSeckillState(voucherId, userId);
+            log.error("秒杀订单消息投递失败，已回滚 Redis 预扣状态, orderId={}", order, e);
+            return Result.fail("下单失败，请稍后重试");
+        }
         return Result.ok(order);
+    }
+
+    private void rollbackRedisSeckillState(Long voucherId, Long userId) {
+        stringRedisTemplate.execute(
+                SECKILL_ROLLBACK_SCRIPT,
+                java.util.Arrays.asList("seckill:stock:" + voucherId, "seckill:user:" + voucherId),
+                userId.toString()
+        );
     }
 //    @Override
 //    public Result purchase(Long voucherId) {
@@ -184,10 +207,13 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Transactional(rollbackFor = Exception.class)
     public void createVoucherOrder (VoucherOrder voucherOrder) {
         Long userId = voucherOrder.getUserId();
+        if (getById(voucherOrder.getId()) != null) {
+            return;
+        }
         //数据库判断当前用户是否下过单
         int count = query().eq("user_id", userId).eq("voucher_id", voucherOrder.getVoucherId()).count();
         if (count > 0) {
-            log.error("同一名用户不能重复下单");
+            throw new IllegalStateException("同一名用户不能重复下单");
         }
         // 乐观锁
         boolean updateSuccess = iSeckillVoucherService.update()
@@ -197,8 +223,10 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 .update();
         if (!updateSuccess) {
             // 扣减库存失败
-            log.error("库存不足");
+            throw new IllegalStateException("库存不足");
         }
-        save(voucherOrder);
+        if (!save(voucherOrder)) {
+            throw new IllegalStateException("创建订单失败");
+        }
     }
 }

@@ -1,6 +1,5 @@
 package com.CityTop.controller;
 
-import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import com.CityTop.dto.Result;
 import com.CityTop.utils.SystemConstants;
@@ -8,14 +7,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.UUID;
 
 @Slf4j
 @RestController
 @RequestMapping("upload")
 public class UploadController {
+
+    private static final Path IMAGE_UPLOAD_ROOT = Paths.get(SystemConstants.IMAGE_UPLOAD_DIR)
+            .toAbsolutePath()
+            .normalize();
 
     @PostMapping("blog")
     public Result uploadImage(@RequestParam("file") MultipartFile image) {
@@ -25,7 +30,7 @@ public class UploadController {
             // 生成新文件名
             String fileName = createNewFileName(originalFilename);
             // 保存文件
-            image.transferTo(new File(SystemConstants.IMAGE_UPLOAD_DIR, fileName));
+            image.transferTo(resolveUploadPath(fileName).toFile());
             // 返回结果
             log.debug("文件上传成功，{}", fileName);
             return Result.ok(fileName);
@@ -36,12 +41,21 @@ public class UploadController {
 
     @GetMapping("/blog/delete")
     public Result deleteBlogImg(@RequestParam("name") String filename) {
-        File file = new File(SystemConstants.IMAGE_UPLOAD_DIR, filename);
-        if (file.isDirectory()) {
+        Path file;
+        try {
+            file = resolveUploadPath(filename);
+        } catch (IllegalArgumentException e) {
             return Result.fail("错误的文件名称");
         }
-        FileUtil.del(file);
-        return Result.ok();
+        if (!Files.isRegularFile(file)) {
+            return Result.fail("文件不存在或文件名称错误");
+        }
+        try {
+            Files.delete(file);
+            return Result.ok();
+        } catch (IOException e) {
+            throw new RuntimeException("文件删除失败", e);
+        }
     }
 
     private String createNewFileName(String originalFilename) {
@@ -53,11 +67,28 @@ public class UploadController {
         int d1 = hash & 0xF;
         int d2 = (hash >> 4) & 0xF;
         // 判断目录是否存在
-        File dir = new File(SystemConstants.IMAGE_UPLOAD_DIR, StrUtil.format("/blogs/{}/{}", d1, d2));
-        if (!dir.exists()) {
-            dir.mkdirs();
+        Path dir = IMAGE_UPLOAD_ROOT.resolve(StrUtil.format("blogs/{}/{}", d1, d2)).normalize();
+        try {
+            Files.createDirectories(dir);
+        } catch (IOException e) {
+            throw new RuntimeException("创建上传目录失败", e);
         }
         // 生成文件名
         return StrUtil.format("/blogs/{}/{}/{}.{}", d1, d2, name, suffix);
+    }
+
+    private Path resolveUploadPath(String filename) {
+        if (StrUtil.isBlank(filename)) {
+            throw new IllegalArgumentException("文件名称不能为空");
+        }
+        String relativeName = filename.replace('\\', '/');
+        while (relativeName.startsWith("/")) {
+            relativeName = relativeName.substring(1);
+        }
+        Path target = IMAGE_UPLOAD_ROOT.resolve(relativeName).normalize();
+        if (!target.startsWith(IMAGE_UPLOAD_ROOT)) {
+            throw new IllegalArgumentException("非法文件路径");
+        }
+        return target;
     }
 }
