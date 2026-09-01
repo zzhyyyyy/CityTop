@@ -32,6 +32,14 @@ citytop:
   websocket:
     # 生产环境请替换为前端实际域名，多个域名以逗号分隔。
     allowed-origins: http://localhost:8080,http://localhost:5173
+  xxl-job:
+    # 默认关闭；部署 xxl-job-admin 后改为 true 并填写 admin-addresses。
+    enabled: false
+    admin-addresses: http://127.0.0.1:8080/xxl-job-admin
+    appname: citytop-executor
+    port: 9999
+    log-path: ./logs/xxl-job
+    log-retention-days: 30
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
   type-aliases-package: com.CityTop.entity # 别名扫描包
