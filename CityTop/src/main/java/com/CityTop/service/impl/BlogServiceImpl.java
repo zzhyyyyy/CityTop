@@ -6,6 +6,7 @@ import com.CityTop.entity.Blog;
 import com.CityTop.entity.User;
 import com.CityTop.mapper.BlogMapper;
 import com.CityTop.service.IBlogService;
+import com.CityTop.service.NotificationService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.CityTop.service.IUserService;
 import com.CityTop.utils.UserHolder;
@@ -37,6 +38,8 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
     private IBlogService iBlogService;
     @Autowired
     private RedisTemplate<Object, Object> redisTemplate;
+    @Autowired
+    private NotificationService notificationService;
 
     @Override
     public Result queryBlogById(Long id) {
@@ -67,6 +70,9 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
             if (success) {
                 stringRedisTemplate.opsForZSet().add("blog:liked:" + id, UserHolder.getUser().getId().toString(), System.currentTimeMillis());
                 blog.setIsLike(true);
+                if (!UserHolder.getUser().getId().equals(blog.getUserId())) {
+                    notificationService.notifyUser(blog.getUserId(), "BLOG_LIKED", "你的笔记收到了一个点赞");
+                }
             }
         }
         return Result.ok(blog);
