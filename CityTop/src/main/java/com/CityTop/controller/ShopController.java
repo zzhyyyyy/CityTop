@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.CityTop.dto.Result;
 import com.CityTop.entity.Shop;
 import com.CityTop.service.IShopService;
+import com.CityTop.service.ShopSearchService;
 import com.CityTop.utils.SystemConstants;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -31,6 +32,8 @@ public class ShopController {
 
     @Resource
     public IShopService shopService;
+    @Resource
+    private ShopSearchService shopSearchService;
 
     /**
      * 根据id查询商铺信息
@@ -56,6 +59,7 @@ public class ShopController {
         // 返回店铺id
         String key = "shop:" + shop.getId();
         redisTemplate.opsForValue().set(key, JSON.toJSONString(shop));
+        shopSearchService.index(shop);
         return Result.ok(shop.getId());
     }
 
@@ -71,6 +75,8 @@ public class ShopController {
         Long id = shop.getId();
         if(id==null) return Result.fail("店铺id不能为空");
         shopService.updateById(shop);
+        Shop savedShop = shopService.getById(id);
+        shopSearchService.index(savedShop);
         String key = "shop:" + id;
         if(redisTemplate.opsForValue().get(key)!=null)  redisTemplate.delete(key);
         return Result.ok();
@@ -114,5 +120,25 @@ public class ShopController {
                 .page(new Page<>(current, SystemConstants.MAX_PAGE_SIZE));
         // 返回数据
         return Result.ok(page.getRecords());
+    }
+
+    /**
+     * Searches shops by name, area and address. Elasticsearch is used only when enabled.
+     */
+    @GetMapping("/search")
+    public Result search(
+            @RequestParam("keyword") String keyword,
+            @RequestParam(value = "current", defaultValue = "1") Integer current
+    ) {
+        return Result.ok(shopSearchService.search(keyword, current, SystemConstants.MAX_PAGE_SIZE));
+    }
+
+    /**
+     * Rebuilds the whole shop index after Elasticsearch is enabled or an index is recreated.
+     */
+    @PostMapping("/search/rebuild")
+    public Result rebuildSearchIndex() {
+        shopSearchService.rebuildIndex();
+        return Result.ok();
     }
 }

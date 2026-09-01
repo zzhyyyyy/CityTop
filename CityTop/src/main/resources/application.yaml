@@ -24,6 +24,11 @@ rocketmq:
   name-server: localhost:9876
   producer:
     group: seckill-order-producer-group
+citytop:
+  search:
+    elasticsearch:
+      # 默认走 MySQL 兼容检索；部署 Elasticsearch 后改为 true。
+      enabled: false
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
   type-aliases-package: com.CityTop.entity # 别名扫描包
