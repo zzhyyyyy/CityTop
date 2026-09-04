@@ -6,8 +6,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -19,10 +21,24 @@ import java.util.concurrent.CopyOnWriteArraySet;
 @Slf4j
 public class NotificationSessionRegistry {
 
+    private static final int SEND_TIME_LIMIT_MILLIS = 10_000;
+    private static final int SEND_BUFFER_SIZE_LIMIT_BYTES = 64 * 1024;
+
     private final ConcurrentHashMap<Long, CopyOnWriteArraySet<WebSocketSession>> sessions = new ConcurrentHashMap<>();
 
     public void register(Long userId, WebSocketSession session) {
-        sessions.computeIfAbsent(userId, ignored -> new CopyOnWriteArraySet<>()).add(session);
+        CopyOnWriteArraySet<WebSocketSession> userSessions = sessions.computeIfAbsent(
+                userId,
+                ignored -> new CopyOnWriteArraySet<>()
+        );
+        // A thread pool can make multiple notification tasks reach the same connection concurrently.
+        // This decorator serializes socket writes and bounds the buffered payload size.
+        userSessions.removeIf(existing -> Objects.equals(existing.getId(), session.getId()));
+        userSessions.add(new ConcurrentWebSocketSessionDecorator(
+                session,
+                SEND_TIME_LIMIT_MILLIS,
+                SEND_BUFFER_SIZE_LIMIT_BYTES
+        ));
     }
 
     public void unregister(Long userId, WebSocketSession session) {
@@ -30,7 +46,7 @@ public class NotificationSessionRegistry {
         if (userSessions == null) {
             return;
         }
-        userSessions.remove(session);
+        userSessions.removeIf(existing -> Objects.equals(existing.getId(), session.getId()));
         if (userSessions.isEmpty()) {
             sessions.remove(userId, userSessions);
         }
@@ -51,7 +67,7 @@ public class NotificationSessionRegistry {
             try {
                 session.sendMessage(new TextMessage(payload));
                 delivered++;
-            } catch (IOException exception) {
+            } catch (IOException | RuntimeException exception) {
                 log.warn("WebSocket notification delivery failed, userId={}", userId, exception);
                 unregister(userId, session);
             }

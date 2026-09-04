@@ -17,6 +17,8 @@ class NotificationSessionRegistryTest {
         NotificationSessionRegistry registry = new NotificationSessionRegistry();
         WebSocketSession active = mock(WebSocketSession.class);
         WebSocketSession closed = mock(WebSocketSession.class);
+        when(active.getId()).thenReturn("active-session");
+        when(closed.getId()).thenReturn("closed-session");
         when(active.isOpen()).thenReturn(true);
         when(closed.isOpen()).thenReturn(false);
         registry.register(1L, active);
@@ -27,5 +29,17 @@ class NotificationSessionRegistryTest {
         assertEquals(1, delivered);
         assertEquals(1, registry.connectionCount(1L));
         verify(active).sendMessage(any());
+    }
+
+    @Test
+    void shouldRemoveDecoratedSessionWhenHandlerPassesOriginalSession() {
+        NotificationSessionRegistry registry = new NotificationSessionRegistry();
+        WebSocketSession session = mock(WebSocketSession.class);
+        when(session.getId()).thenReturn("session-id");
+
+        registry.register(1L, session);
+        registry.unregister(1L, session);
+
+        assertEquals(0, registry.connectionCount(1L));
     }
 }

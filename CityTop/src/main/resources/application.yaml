@@ -32,6 +32,13 @@ citytop:
   websocket:
     # 生产环境请替换为前端实际域名，多个域名以逗号分隔。
     allowed-origins: http://localhost:8080,http://localhost:5173
+    notification-executor:
+      # 在线通知属于尽力而为的实时推送；队列满时记录告警但不影响点赞等主业务。
+      core-pool-size: 2
+      max-pool-size: 8
+      queue-capacity: 500
+      keep-alive-seconds: 60
+      shutdown-await-seconds: 10
   xxl-job:
     # 默认关闭；部署 xxl-job-admin 后改为 true 并填写 admin-addresses。
     enabled: false
