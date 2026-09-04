@@ -8,7 +8,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
- * Isolates best-effort online WebSocket delivery from request-processing threads.
+ * 将尽力而为的在线 WebSocket 推送与 HTTP 请求处理线程隔离。
  */
 @Configuration
 public class WebSocketNotificationExecutorConfig {
@@ -27,7 +27,7 @@ public class WebSocketNotificationExecutorConfig {
         executor.setKeepAliveSeconds(keepAliveSeconds);
         executor.setThreadNamePrefix("ws-notify-");
 
-        // Real-time online notifications are best-effort. Rejection is handled by the caller.
+        // 在线实时通知属于尽力而为的能力；线程池拒绝任务时由调用方记录并降级。
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(shutdownAwaitSeconds);

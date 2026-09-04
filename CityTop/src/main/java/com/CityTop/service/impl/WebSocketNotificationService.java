@@ -34,7 +34,7 @@ public class WebSocketNotificationService implements NotificationService {
                 }
             });
         } catch (TaskRejectedException exception) {
-            // Do not turn a successful domain operation into a failed request for an online-only push.
+            // 仅在线推送失败不能影响已经成功的业务操作。
             log.warn("WebSocket notification queue is full; skipping online delivery, userId={}, type={}", userId, type);
         }
     }

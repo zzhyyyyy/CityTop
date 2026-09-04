@@ -14,7 +14,7 @@ import java.util.Map;
 import static com.CityTop.utils.RedisConstants.LOGIN_USER_KEY;
 
 /**
- * Validates the existing login token before upgrading an HTTP request to WebSocket.
+ * 在 HTTP 请求升级为 WebSocket 连接前校验现有登录令牌。
  */
 @Component
 public class NotificationHandshakeInterceptor implements HandshakeInterceptor {
@@ -47,6 +47,6 @@ public class NotificationHandshakeInterceptor implements HandshakeInterceptor {
     @Override
     public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                WebSocketHandler wsHandler, Exception exception) {
-        // Session registration is handled by the WebSocket handler.
+        // 会话注册由 WebSocket 处理器在连接建立后完成。
     }
 }

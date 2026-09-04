@@ -1,7 +1,7 @@
 package com.CityTop.service;
 
 /**
- * Delivers a user-facing domain event through the active notification channel.
+ * 通过当前启用的通知通道向用户投递领域事件。
  */
 public interface NotificationService {
 

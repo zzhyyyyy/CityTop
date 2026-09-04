@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
- * Keeps only online WebSocket sessions. It is local to one application instance.
+ * 仅保存当前应用实例中的在线 WebSocket 会话。
  */
 @Component
 @Slf4j
@@ -31,8 +31,8 @@ public class NotificationSessionRegistry {
                 userId,
                 ignored -> new CopyOnWriteArraySet<>()
         );
-        // A thread pool can make multiple notification tasks reach the same connection concurrently.
-        // This decorator serializes socket writes and bounds the buffered payload size.
+        // 线程池可能让多个通知任务并发访问同一连接。
+        // 装饰器会串行化 Socket 写入，并限制待发送消息的缓冲大小。
         userSessions.removeIf(existing -> Objects.equals(existing.getId(), session.getId()));
         userSessions.add(new ConcurrentWebSocketSessionDecorator(
                 session,

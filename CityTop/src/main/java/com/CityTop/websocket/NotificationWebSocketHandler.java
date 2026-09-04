@@ -7,7 +7,7 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 /**
- * Connection lifecycle for personal notification channels.
+ * 个人通知通道的连接生命周期处理器。
  */
 @Component
 public class NotificationWebSocketHandler extends TextWebSocketHandler {
@@ -25,7 +25,7 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
-        // Notification connections are server-push only.
+        // 通知连接仅支持服务端主动推送。
     }
 
     @Override
